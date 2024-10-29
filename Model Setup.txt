@@ -1,0 +1,15 @@
+VOOD
+	.vscode
+	data
+		binary
+		frames
+		labels
+		saved_model
+	include
+		(header files)
+	main
+		executable
+		debug_output
+	src
+		(src files)
+	debug_output
