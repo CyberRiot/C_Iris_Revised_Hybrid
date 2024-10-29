@@ -289,7 +289,11 @@ RNNLayer::~RNNLayer() {
 std::vector<double>* RNNLayer::forward(std::vector<double>* input) {
     // Set the chunk size to 8192
     int chunk_size = 8192;  
-    int num_chunks = (input->size() + chunk_size - 1) / chunk_size;  // Calculate how many chunks to process
+    int num_chunks = input->size() / chunk_size;  // Calculate how many chunks to process
+
+    if (num_chunks == 0) num_chunks = 1;  // Ensure there's at least one chunk
+
+    std::vector<double>* output = new std::vector<double>(hidden_size * num_chunks);
 
     std::cout << "RNNLayer forward pass with input size: " << input->size() << std::endl;
 
@@ -297,9 +301,7 @@ std::vector<double>* RNNLayer::forward(std::vector<double>* input) {
         std::cerr << "Error: Input to RNNLayer is null or empty!" << std::endl;
         exit(1);  // Prevent execution with empty input
     }
-
-    std::vector<double>* output = new std::vector<double>(hidden_size * num_chunks);
-
+    
     // Process each chunk of data
     for (int chunk_index = 0; chunk_index < num_chunks; ++chunk_index) {
         // Extract the chunk input
@@ -307,33 +309,20 @@ std::vector<double>* RNNLayer::forward(std::vector<double>* input) {
         int end_index = std::min(start_index + chunk_size, (int)input->size());
         std::vector<double> chunk_input(input->begin() + start_index, input->begin() + end_index);
 
-        // Check if we have a valid chunk
-        if (chunk_input.empty()) {
-            std::cerr << "Warning: Chunk " << chunk_index + 1 << " is empty. Skipping." << std::endl;
-            continue;
-        }
+        // Debug output
+        std::cout << "Processing chunk " << chunk_index + 1 << "/" << num_chunks 
+                  << " with input size: " << chunk_input.size() << std::endl;
 
         // Forward pass through each hidden neuron for this chunk
         for (int i = 0; i < hidden_size; i++) {
-            // Ensure i is within bounds
-            if (i >= hidden_neurons->size()) {
-                std::cerr << "Error: Attempting to access hidden_neurons at index " << i 
-                          << ", but size is " << hidden_neurons->size() << std::endl;
-                exit(1);
-            }
+            // Debug output for neuron activation
+            std::cout << "Accessing Neuron " << i << " with weights size: " 
+                      << (*hidden_neurons)[i]->weights->size() << std::endl;
 
-            // Activate the neuron and store the output
-            double activation = (*hidden_neurons)[i]->activate(&chunk_input);
-            (*output)[chunk_index * hidden_size + i] = activation;
-
-            // Print activation for first chunk to avoid clutter
-            if (chunk_index == 0 && i < 10) {
-                std::cout << "Neuron " << i << " activation: " << activation << std::endl;
-            }
+            (*output)[chunk_index * hidden_size + i] = (*hidden_neurons)[i]->activate(&chunk_input);
         }
 
-        std::cout << "Processed chunk " << chunk_index + 1 << "/" << num_chunks 
-                  << " with size: " << chunk_input.size() << std::endl;
+        std::cout << "Chunk " << chunk_index + 1 << " forward pass completed." << std::endl;
     }
 
     std::cout << "RNNLayer forward pass completed for all chunks." << std::endl;
@@ -379,15 +368,11 @@ std::vector<double>* RNNLayer::lstm_forward(std::vector<double>* input) {
     // Output for the current time step
     auto output = new std::vector<double>(hidden_size);
 
-    // Print input and hidden neuron sizes for debugging
+    // Debug outputs for sizes
     std::cout << "Input size: " << input->size() 
               << ", Hidden size: " << hidden_size 
               << ", Hidden neurons size: " << hidden_neurons->size() 
               << std::endl;
-
-    // Ensure that the sizes match the expected hidden size
-    std::cout << "hidden_state size: " << hidden_state->size() << std::endl;
-    std::cout << "cell_state size: " << cell_state->size() << std::endl;
 
     if (hidden_neurons->size() != hidden_size) {
         std::cerr << "Error: Hidden neurons size mismatch. Expected: " << hidden_size 
@@ -395,47 +380,13 @@ std::vector<double>* RNNLayer::lstm_forward(std::vector<double>* input) {
         exit(1);
     }
 
-    if (hidden_state->size() != hidden_size) {
-        std::cerr << "Error: Hidden state size mismatch. Expected: " << hidden_size 
-                  << ", Got: " << hidden_state->size() << std::endl;
-        exit(1);
-    }
-
-    if (cell_state->size() != hidden_size) {
-        std::cerr << "Error: Cell state size mismatch. Expected: " << hidden_size 
-                  << ", Got: " << cell_state->size() << std::endl;
-        exit(1);
-    }
-
-    // Loop through the hidden size
+    // Process each hidden neuron
     for (int i = 0; i < hidden_size; i++) {
-        std::cout << "Processing index: " << i << std::endl;
-
         if (i >= hidden_neurons->size()) {
-            std::cerr << "Error: Hidden neurons out of bounds at index " << i 
-                      << " for size " << hidden_neurons->size() << std::endl;
+            std::cerr << "Error: Hidden neurons out of bounds at index " << i << std::endl;
             exit(1);
         }
 
-        if (i >= hidden_state->size()) {
-            std::cerr << "Error: Hidden state out of bounds at index " << i 
-                      << " for size " << hidden_state->size() << std::endl;
-            exit(1);
-        }
-
-        if (i >= cell_state->size()) {
-            std::cerr << "Error: Cell state out of bounds at index " << i 
-                      << " for size " << cell_state->size() << std::endl;
-            exit(1);
-        }
-
-        int input_index = i % input->size();
-        if (input_index >= input->size()) {
-            std::cerr << "Error: Input index out of bounds: " << input_index << std::endl;
-            exit(1);
-        }
-
-        // Get the activation from the corresponding hidden neuron
         neuron* n = (*hidden_neurons)[i];
         double neuron_output = n->activate(input);  // Pass input to the neuron for activation
 
